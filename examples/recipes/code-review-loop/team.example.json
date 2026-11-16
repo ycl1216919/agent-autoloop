@@ -1,0 +1,12 @@
+{
+  "name": "开发任务",
+  "workspace": "C:/REPLACE/isolated-workspace",
+  "taskFile": "C:/REPLACE/task.md",
+  "stateDirectory": "C:/REPLACE/task-state",
+  "checks": [
+    ["git", "diff", "--check"],
+    ["node", "--test"]
+  ],
+  "maxAttempts": 3,
+  "start": "implement"
+}

@@ -1,0 +1,24 @@
+{
+  "sources": { "local": { "name": "本人提交" } },
+  "agents": {
+    "team": {
+      "name": "开发与审查接力",
+      "worker": "my-computer",
+      "use": "command",
+      "command": ["node", "C:/REPLACE/agent-autoloop/examples/recipes/code-review-loop/run.ts", "C:/REPLACE/team.json"],
+      "timeout": 30,
+      "maxActive": 1
+    }
+  },
+  "channels": {},
+  "rules": [
+    {
+      "name": "开发审查接力",
+      "when": { "source": "local", "types": ["code.request"] },
+      "to": "team",
+      "cwd": "C:/REPLACE/isolated-workspace",
+      "prompt": "执行本人配置的开发任务；遇到阻塞保存阶段并交回决定卡片。",
+      "tell": "always"
+    }
+  ]
+}
