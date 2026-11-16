@@ -3,3 +3,5 @@ node_modules
 *.log
 .claude/
 .autoloop-local/
+/personal-team/
+/docs/personal-team.md
