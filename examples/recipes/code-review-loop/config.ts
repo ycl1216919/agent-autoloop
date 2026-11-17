@@ -140,6 +140,8 @@ export function readFindings(message: string): readonly Finding[] {
   const value: unknown = JSON.parse(message);
   if (!object(value) || !Array.isArray(value.findings)) throw new LoopError("审查没有提供有效的 findings 结果");
   return value.findings.map((finding: unknown) => {
+    if (typeof finding === "string" && finding.trim())
+      return { title: finding.trim().replace(/\s+/g, " ").slice(0, 160), text: finding };
     if (!object(finding) || !text(finding.title) || !text(finding.text))
       throw new LoopError("审查意见缺少 title 或 text");
     return { title: finding.title, text: finding.text };

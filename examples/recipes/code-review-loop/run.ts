@@ -15,15 +15,8 @@ import {
 import { runAgent, runChecks } from "./process.ts";
 import { git, revision } from "./snapshot.ts";
 import { QuotaWait } from "./quota.ts";
+import { blockerText, reviewStageLabels as labels } from "./blocker.ts";
 
-const labels = {
-  implement: "实现",
-  check: "项目检查",
-  review: "代码审查",
-  done: "验收完成",
-  nothing: "无需执行",
-  cancelled: "已停止",
-} as const;
 const help = "用法：node run.ts <team.json> [--check]\n--check 只检查配置和两种 CLI 的接入，不执行开发任务。";
 const unreachable = (value: never): never => {
   throw new LoopError(`不认识的阶段：${value}`);
@@ -197,7 +190,22 @@ export async function runTeam(file: string) {
     save(state);
     if (error instanceof QuotaWait)
       return `${team.name} 等待 Claude 额度恢复，已安排自动续审。\n\n\`\`\`agent-autoloop\n${JSON.stringify({ later: [{ key: "code-review-loop-quota", at: error.at, about: "按保存的代码版本核对最新检查，只继续未完成的审查。" }] })}\n\`\`\``;
-    return `待你处理：${team.name} 停在${labels[state.phase]}，现有进度已保存。\n\n\`\`\`agent-autoloop\n${JSON.stringify({ ask: [{ key: "code-review-loop-blocked", title: `${team.name}需要继续处理`, text: `当前阶段：${labels[state.phase]}。${action}`, options: ["已处理，继续", "停止这个任务"], about: `任务配置 ${file}；阶段 ${state.phase}；保留已完成阶段，只继续未完成工作。` }] })}\n\`\`\``;
+    const context = blockerText({
+      goal: task,
+      phase: labels[state.phase],
+      completed: [
+        "本轮代码与阶段记录已保留",
+        ...(existsSync(join(team.stateDirectory, `checks-${state.attempt}.json`))
+          ? ["本轮检查回执已保存；审核尚未放行"]
+          : []),
+      ],
+      reason: action,
+      impact: "本轮尚未验收通过，不进入合并或发布。",
+      action: "无需手改日志或 JSON。按阻塞原因恢复外部条件后，选择继续；要暂停则选择停止。",
+      resume: `先核对现有代码和证据，只接续${labels[state.phase]}；保留已完成阶段，停止则保留现场。`,
+      evidence: [stateFile, join(team.stateDirectory, `checks-${state.attempt}.json`)],
+    });
+    return `待你处理：${team.name} 停在${labels[state.phase]}，现有进度已保存。\n\n\`\`\`agent-autoloop\n${JSON.stringify({ ask: [{ key: "code-review-loop-blocked", title: `${team.name}需要继续处理`, text: context, options: ["已处理，继续", "停止这个任务"], about: `任务配置 ${file}；阶段 ${state.phase}；保留已完成阶段，只继续未完成工作。` }] })}\n\`\`\``;
   }
 }
 

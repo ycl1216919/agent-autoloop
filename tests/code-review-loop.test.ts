@@ -2,28 +2,16 @@
 // an approval is accepted after files or check results change; quota exhaustion requires a manual restart.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { readMessage, resultFrom } from "../worker/contract.ts";
+import { program } from "./support/review-program.ts";
 
 const root = mkdtempSync(join(tmpdir(), "autoloop-code-review-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 const entry = join(import.meta.dirname, "../examples/recipes/code-review-loop/run.ts");
-
-function program(folder: string, name: string, source: string) {
-  const script = join(folder, `${name}.mjs`);
-  const authentication = `if(['login status','auth status'].includes(process.argv.slice(2).join(' '))){console.log(JSON.stringify({loggedIn:true}));process.exit(0);}`;
-  writeFileSync(script, `#!${process.execPath}\n${authentication}\n${source}`);
-  if (process.platform !== "win32") {
-    chmodSync(script, 0o755);
-    return script;
-  }
-  const shim = join(folder, `${name}.cmd`);
-  writeFileSync(shim, `@ECHO off\r\n"${process.execPath}" "%~dp0\\${name}.mjs" %*\r\n`);
-  return shim;
-}
 
 function fixture(name: string, agents: { coder: string; reviewer: string }) {
   const folder = join(root, name);
@@ -167,6 +155,11 @@ ${approval}`,
   const blocked = run(f.config);
   assert.match(blocked, /agent-autoloop/);
   assert.match(blocked, /Review temporarily unavailable/);
+  const questions = readMessage(blocked).receipt?.ask;
+  assert.ok(Array.isArray(questions));
+  assert.ok(questions[0].text.includes(readFileSync(join(f.folder, "task.md"), "utf8").trim()));
+  assert.ok(questions[0].text.includes("checks-1.json"));
+  assert.ok(questions[0].text.includes(join(f.folder, "state", "state.json")));
   assert.equal(state(f.folder).phase, "review");
   writeFileSync(join(f.folder, "review-restored"), "ready");
   run(f.config);
