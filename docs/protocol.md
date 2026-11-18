@@ -451,6 +451,8 @@ Node 请求转换层只把 Node 的请求变成 Request；文件、SQLite 连接
 
 ### ACP 和 MCP
 
+多入口、多执行者的组合示例见[个人团队模板](../examples/recipes/personal-team/README.md)。Discord Gateway 和 AI 客户端均为外部客户端，模型账号隔离在执行程序中完成；新增接法不改变 HTTP 协议、规则格式或现有插件。架构图中的通道和 Agent 边界保持不变。
+
 `use: "acp"` 配合 `command: ["某个 ACP 程序", "启动参数"]` 使用 stdio ACP v1，ACP Agent 必须写 `command`，没写时这一轮算没跑成，原因里写着缺什么。桥接先初始化，再新建或接着旧会话：Agent 声明了 `loadSession` 就用 `session/load`，只声明 `sessionCapabilities.resume` 就用 `session/resume`。加载时重放的历史不算这一轮的回复，思考和工具输出不进回执。提示词发出去就算这一轮开始了，之后再断就留在原会话重派。接着旧会话时上一次可能已经干了一半，只有 Agent 明确拒绝这个会话（回了错误，或两种恢复都不支持）才开新会话；程序起不来、初始化出错、加载中途断了都留在原会话重派。会话正被别的程序打开（错误的 `data.reason` 是 `thread_active_writer`）也不算拒绝：这一轮算没跑成，原因是 Agent 自己的话，留在原会话过一会儿重派，连续第 3 次的卡片会带上这句话，告诉你要关掉什么。其他错误都算拒绝，不看错误码：官方 Codex 适配器对真不存在的会话回的是 -32603。只有 `end_turn` 且有最后一条文字消息才算完成：有 `messageId` 就按它分消息，没有时思考、工具调用和做完或失败的工具更新都算分界。一轮没完成时桥接马上交代原因，Agent 过 30 秒还不走就连同进程组一起停掉。消息只按换行分帧，读不懂的行算这一轮没跑成。会话编号交给中台保存。没有声明文件读写、终端或交互登录能力，Agent 用自己的工具；需要登录时先用它自己的命令行登录。
 
 权限只选一次性的选项：`read` 允许结构化的读和搜索，`edit` 再允许工作目录内的编辑（核对符号链接，经过找不到目标的链接算在目录外），`full` 允许其他操作。权限请求只带工具调用编号时，按这次调用之前说过的种类和路径判断，请求自己带的字段优先。未提供相应选项就取消。权限依赖 Agent 遵守 ACP，不提供额外的系统隔离；规范允许 Agent 不询问就执行，这种操作 `access` 拦不住，要用 Agent 自己的模式限制。官方 Codex 适配器给的拒绝选项（`reject_once`）只有 `cancel`，选了它整轮以 `stopReason: cancelled` 结束，算没跑成，由中台重派；`read`、`edit` 档下要跑命令的请求就是这样回来的，所以 Agent 非跑命令不可时，给 `full` 或用它自己的模式。`model`、`effort`、`tier` 不生效。核对依据：[初始化](https://agentclientprotocol.com/protocol/v1/initialization)、[会话](https://agentclientprotocol.com/protocol/v1/session-setup)、[工具权限](https://agentclientprotocol.com/protocol/v1/tool-calls)。
@@ -458,6 +460,8 @@ Node 请求转换层只把 Node 的请求变成 Request；文件、SQLite 连接
 `agent-autoloop mcp` 提供 stdio MCP，固定支持 [2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) 版，不支持 2026-07-28 的无握手协议。工具为 `status`、`why`、`answer`、`resolve`、`stop`、`emit`、`tell`、`pause`、`resume`、`replay`、`run`；`status` 可带 `before` 往前翻轮次；按本机已有的本人或来源密钥展示工具，`pause`、`resume`、`replay`、`run` 和命令行同名命令一样要本人密钥。它调用同样的 HTTP 接口，不直接改数据库；密钥留在本机 `config.json`。MCP 客户端把程序设为 `node`，参数设为引擎的绝对路径 `bin/agent-autoloop.ts` 和 `mcp`，环境里指定 `AGENT_AUTOLOOP_HOME`。标准输出只写 JSON-RPC。消息只按换行分帧；每个工具调用各自回复，慢调用不挡 `ping`。它不区分调用方，都按本人记录（`answer` 记成本人，`emit` 不带层数），不要配进接单程序启动的 CLI 的用户级配置，否则一轮能自己回答自己的卡片。
 
 ### 通道模板与命令行示例
+
+自然语言总控属于外部客户端与接单程序的组合，不是内核的新路由方式。可信通道先核对本人和来源，原文只写入事件资料；总控在可信清单内解释本人目标，输出经外层校验的回执事件。后续规则固定决定 Agent、目录和权限，模型不能从文字生成这些配置。总控的源事件、分派事件、回答和执行结果均通过现有 `/v1` 留在同一事实日志中，不增加内核能力或改变旧插件约定。此能力只处理已授权的本人入口，其他来源仍只能提供资料。
 
 Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platform`，后者可选 `dingtalk`、`wecom`、`slack`、`discord`。不写 platform 时可用 `body` 自定义模板，字符串里的 `{text}` 替换为卡片内容。四个模板对照官方文档：[钉钉](https://open.dingtalk.com/document/orgapp/custom-bot-send-message-type)、[企微](https://developer.work.weixin.qq.com/document/path/91770)、[Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)、[Discord](https://discord.com/developers/docs/resources/webhook#execute-webhook)。企微把普通网址显示为“打开链接”，把无选项通知的结案地址显示为“点击处理”，不再另列“1. 已处理”；卡片里写的链接标记和尖括号换成全角照字显示，不会被画成链接、标签或提及。钉钉和企微检查响应的 `errcode`，Slack 检查 `ok`；Discord 禁止文字触发提及。超过企微 2048 字节或 Discord 2000 字的卡片会报告失败，不截断问题或回答链接。Webhook 本身没有幂等保证，消息发送成功但报告丢失时可能重发。
 

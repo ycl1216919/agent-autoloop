@@ -71,6 +71,10 @@ Claude 委托 Codex 的完整规则、Skill 和参数调用脚本见[浏览器�
 
 ## 通道插件
 
+原生 Discord 通道在 `plugins/discord/channel.ts`，支持 Gateway 命令与原消息卡片按钮；原有 `plugins/webhook/channel.ts` 的 Discord 模板仍是文字与回答链接。两种接法、私有身份与权限配置见[个人团队模板](../examples/recipes/personal-team/README.md)。一个 Bot 的 Gateway 由一个通道程序维护，不为每个模型重复开监听。
+
+私有通道配置显式增加 `inbox` 后，同一个 Gateway 还接收指定本人的普通消息，送到固定总控事件；需要 Message Content Intent。总控与业务执行通过已有回执事件接力，不在插件中增加另一套队列或模型调度。未开启时不订阅普通消息，原有命令与按钮保持兼容。
+
 从 [hello-channel/channel.ts](../examples/plugins/hello-channel/channel.ts) 开始。它把卡片写进文件，用命令行回答。
 
 默认导出异步函数，参数是 `{ hub, options, log, signal }`；`options` 来自 `config.json`，不含中台密钥。

@@ -95,6 +95,10 @@ Claude 主任务要委托 Codex 操作网页时，从 `examples/recipes/browser-
 
 ## 接一个通道
 
+需要 Discord 双向命令和按钮时，用[个人团队模板](../../examples/recipes/personal-team/README.md)的原生 `discord` 通道；只发文字和回答链接时仍用 `webhook` 模板。原生通道单独核对应用、服务器、频道和本人 ID，分别使用 owner/source/channel 身份；先停掉旧 Bot 的监听，不覆盖现有应用的整份命令清单。
+
+需要自然语言总控时显式配置 `inbox` 并开启 Message Content Intent；总控及开发接力规则都写 `parallel: 1`。使用可信项目清单限定任务入口，原文只进资料文件；总控选择清单项，实际执行者、目录和权限仍由规则固定。用户可回复原卡片补充文字，已处理的 Bot 消息回复不另建任务；新目标另发一条消息。
+
 配置在两处：`rules.json` 的 `channels` 登记（`answerers` 是谁能回答，没写时通道里谁都能回答，`doctor` 会提醒），`config.json` 的 `channels` 写密钥和选项。`agent-autoloop key new channel <名字>` 拿密钥（先问用户）。改了 `config.json` 要 `agent-autoloop service install` 重启。默认每张卡片发到所有通道；某条规则的卡片只想发到某几个通道，在这条规则里写 `"channels": ["feishu"]`；通道多了，`tell`、中台自己的告警这些不属于哪条规则的卡片会每个通道各发一遍，在 `rules.json` 顶层写 `"defaultChannels": ["feishu"]`，自己没写 `channels` 的都只发那几个。
 
 **桌面通知**：新装的中台默认开着（`plugins/desktop/channel.ts`），两处各有一个 `desktop`。卡片第一次发送时，macOS 用 `osascript`、Linux 用 `notify-send`、Windows 用 PowerShell 系统托盘通知弹一条通知，标题为“Agent 问你一个问题”，正文是卡片标题、“来源：<规则名>”（卡片带规则且标题不是规则名时）和“运行 agent-autoloop status 查看”，不能在通知上回答。没有图形会话时安静跳过，问题仍在；通知命令失败时报告失败，不会让中台退出。接了别的通道可以留着它；不想要就把两处的 `desktop` 都删掉，再重启。以前装的中台不会自动加上它。

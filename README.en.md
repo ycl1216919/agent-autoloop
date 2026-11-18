@@ -186,6 +186,8 @@ Agents that speak ACP connect with `use: "acp"` and can go on in the same sessio
 
 ## Four kernel mechanisms
 
+The [personal-team recipe](examples/recipes/personal-team/README.md) adds a native Discord bot with commands and card buttons, plus MCP entry points for human-operated AI clients. Explicitly enabling `inbox` also accepts authorized natural-language requests and text replies to original decision cards. An external controller selects from a trusted project catalog; rules still fix executors, directories, and permissions. Gemini personal and business accounts use separate homes; background executors do not inherit the owner's management tools. The existing Discord webhook channel remains available. See the recipe for the distinction between protocol tests and real-account acceptance.
+
 The kernel has zero runtime dependencies. It reads no clock, uses no randomness, and makes no outbound requests; plugins connect in, and credentials stay with the plugins that use them. Identical inputs always give identical results. It brings four proven systems patterns to command-line agents:
 
 - **Zero-cost wait**: The process exits while waiting for your call, and the waiting state lives in SQLite, so the agent does not stay alive. If you reply three days later, no agent process runs and no tokens are spent in the meantime — only the lightweight hub waits in the background; your answer resumes the original conversation.

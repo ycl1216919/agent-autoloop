@@ -91,6 +91,10 @@ Claude 要委托 Codex 处理网页时，可用[浏览器交接模板](examples/
 
 ## 写第一条规则
 
+要同时接 Discord 和多个 AI 客户端，参考[个人团队模板](examples/recipes/personal-team/README.md)。需要分别完成官方 CLI 登录；Gemini 多账号用独立 `GEMINI_CLI_HOME`。先核实旧 Bot 程序已停，再启用原生 Discord Gateway。私有 Token、来源密钥和 owner 密钥不放进安装参数或仓库，后台执行者不接本人 MCP。
+
+自然语言接入额外需要在 Discord 应用设置开启 Message Content Intent，并在私有通道配置显式写 `inbox`。总控与开发接力的规则都必须写 `parallel: 1`，让回答回到原 subject；项目目录、检查命令和模型程序写在可信配置中，不从消息生成。旧配置不写 `inbox`，行为保持不变。
+
 安装验证完成后，按用户希望自动处理的事从 [README 的场景模板](README.md#拿来即用的场景模板)选一个，再照[配置手册](skills/agent-autoloop/SKILL.md)写规则；用户还没指定用途时再问。用 `agent-autoloop check` 检查；改动几秒内生效。
 
 国内业务可从反馈处理、网站巡检、飞书周报与业务摘要三套模板开始。它们默认飞书本人私聊；替换占位符后，配置和业务资料留在私有目录，不提交到仓库。模板不替用户新建凭据或扩大飞书权限。
