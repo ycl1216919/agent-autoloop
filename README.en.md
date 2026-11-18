@@ -148,6 +148,8 @@ Feedback, website watch, Feishu briefs, and inbox triage default to Asia/Shangha
 
 More: [Claude-to-Codex browser handoff](examples/recipes/browser-handoff/README.md) and [weekly code cleanup](examples/skills/weekly-sweep/SKILL.md).
 
+The [SNS promotion recipe](examples/recipes/sns-promotion/README.md) includes a media inventory tool and draft rules for collection, planning, production, and independent review. The owner reviews the deliverables and publishes manually; service connections require separate verification.
+
 ## Plugin ecosystem: swap any of the four sides
 
 Built-in plugins ship with the program and are enabled through configuration. Use `agent-autoloop add <git URL>` for third-party plugins.

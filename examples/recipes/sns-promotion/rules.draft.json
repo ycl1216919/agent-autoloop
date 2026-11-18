@@ -1,0 +1,65 @@
+{
+  "timezone": "Asia/Tokyo",
+  "askFirst": ["删数据", "花钱", "新建或轮换密钥", "修改权限", "对外投稿与排程；当前由本人手动操作"],
+  "sources": { "sns": { "name": "SNS 阶段资料" } },
+  "agents": {
+    "sns-assets": {
+      "name": "SNS 素材目录盘点",
+      "worker": "my-computer",
+      "use": "command",
+      "command": ["node", "{cwd}/index-assets.ts", "{cwd}/assets.json", "{cwd}/inventory.json"]
+    },
+    "sns-operator": { "name": "SNS 运营", "worker": "my-computer", "use": "codex", "access": "edit" },
+    "sns-reviewer": { "name": "SNS 独立检查", "worker": "my-computer", "use": "claude", "access": "edit" }
+  },
+  "channels": {},
+  "rules": [
+    {
+      "name": "SNS 素材盘点",
+      "when": { "cron": "0 8 * * 1" },
+      "to": "sns-assets",
+      "cwd": "~/.agent-autoloop/work/sns-promotion",
+      "group": "sns",
+      "emits": { "source": "sns", "types": ["sns.assets.ready"] }
+    },
+    {
+      "name": "SNS 资料采集与策划",
+      "when": { "source": "sns", "types": ["sns.assets.ready"] },
+      "to": "sns-operator",
+      "cwd": "~/.agent-autoloop/work/sns-promotion",
+      "group": "sns",
+      "skill": "sns-promotion",
+      "prompt": "执行采集和策划阶段。连接未验收则交卡片；准备好确切版本的计划后发 sns.plan.ready。",
+      "emits": { "source": "sns", "types": ["sns.plan.ready"] }
+    },
+    {
+      "name": "SNS 图文与视频制作",
+      "when": { "source": "sns", "types": ["sns.plan.ready"] },
+      "to": "sns-operator",
+      "cwd": "~/.agent-autoloop/work/sns-promotion",
+      "group": "sns",
+      "skill": "sns-promotion",
+      "prompt": "执行制作阶段，导出并核对实际媒体，固定确切文案和文件摘要后发 sns.media.ready。",
+      "emits": { "source": "sns", "types": ["sns.media.ready"] }
+    },
+    {
+      "name": "SNS 独立检查",
+      "when": { "source": "sns", "types": ["sns.media.ready"] },
+      "to": "sns-reviewer",
+      "cwd": "~/.agent-autoloop/work/sns-promotion",
+      "group": "sns",
+      "skill": "sns-promotion",
+      "prompt": "执行独立检查阶段。通过才发 sns.review.ready；有问题留下绑定版本的修正清单，结束本轮。",
+      "emits": { "source": "sns", "types": ["sns.review.ready"] }
+    },
+    {
+      "name": "SNS 人工验收交付",
+      "when": { "source": "sns", "types": ["sns.review.ready"] },
+      "to": "sns-operator",
+      "cwd": "~/.agent-autoloop/work/sns-promotion",
+      "group": "sns",
+      "skill": "sns-promotion",
+      "prompt": "整理人工验收交付包，按 manual-review.template.md 列出四个平台的文案、媒体路径、版本摘要和检查结果。通过 ask 交本人验收后结束本轮。本人负责手动发布；收到通过也只交付文件，不投稿、不排程、不接第三方发布服务。"
+    }
+  ]
+}

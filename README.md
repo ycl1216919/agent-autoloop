@@ -146,6 +146,8 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 
 更多模板：[Claude 委托 Codex 处理网页](examples/recipes/browser-handoff/README.md)、[每周代码清理](examples/skills/weekly-sweep/SKILL.md)。
 
+[SNS 宣传配方](examples/recipes/sns-promotion/README.md)提供素材盘点工具和采集、策划、制作、独立检查的规则草稿；成品交本人手动验收、手动发布，服务连接分别验收。
+
 ## 插件体系：四个方向都能自由替换
 
 内置插件随程序安装，填好配置即可启用；第三方插件用 `agent-autoloop add <git 地址>` 安装。
