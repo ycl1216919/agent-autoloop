@@ -27,14 +27,18 @@ export function cardMessage(card: Card, config?: DiscordConfig) {
         : card.state === "closed"
           ? `已结案：${card.result ?? ""}`
           : "";
+  const runTag =
+    typeof (card as { run?: number | null }).run === "number"
+      ? `（轮次 #${(card as { run?: number | null }).run}）`
+      : "";
   return {
     content: [
-      guidance?.title ?? card.title,
-      card.rule ? `来源：${card.rule}` : "",
+      `卡片 #${card.id}${runTag} · ${guidance?.title ?? card.title}`,
+      card.rule ? `规则：${card.rule}` : "",
       guidance?.task ? `任务：${guidance.task}` : card.text,
       guidance?.cause ? `卡住原因：${guidance.cause}` : "",
       guidance?.next ? `需要你做：${guidance.next}` : "",
-      guidance?.held && card.state === "open" ? "已保留：等待你处理；没有提交继续执行的回答。" : "",
+      guidance?.held && card.state === "open" ? "状态：已保留，等待你处理（尚未提交继续执行的回答）。" : "",
       outcome,
     ]
       .filter(Boolean)

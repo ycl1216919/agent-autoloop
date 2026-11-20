@@ -36,7 +36,8 @@ export function formatWhy(id: number, facts: Fact[]) {
   function tellRun(fact: Fact, row: Row, before: Row | undefined, receipt: boolean) {
     if (row.claimed_at && row.claimed_at !== before?.claimed_at) {
       const agent = rulesAt.get(row.rules_version).agents[row.agent];
-      add(row.claimed_at, `${agent.worker} 领取（${agent.name}）`);
+      const mode = row.resume ? `，续接会话 ${row.resume}` : "";
+      add(row.claimed_at, `${agent.worker} 领取（${agent.name}${mode}）`);
     }
     if (fact.type === "started" && !started.has(row.issued)) {
       add(fact.at, "开始处理");
@@ -45,6 +46,7 @@ export function formatWhy(id: number, facts: Fact[]) {
     if (row.link && row.link === links.get(row.issued) && row.link !== before?.link) add(fact.at, `会话：${row.link}`);
     if (row.finished_at && row.finished_at !== before?.finished_at) {
       add(row.finished_at, `结束：${row.summary || (row.state === "cancelled" ? "已停止" : "没有填写结论")}`);
+      if (row.memo) add(row.finished_at, `备忘：${row.memo}`);
     }
     if (receipt && row.state === "queued" && row.attempts !== before?.attempts) {
       add(fact.at, `本次未完成：${row.error}；重试时间 ${time(row.not_before)}`);

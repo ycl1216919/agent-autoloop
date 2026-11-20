@@ -204,7 +204,8 @@ GET /v1/work?claim=<这次领活的编号>&wait=50&running=7,8&capacity=1    Aut
     "timers":  [{ "key", "about", "at", "events" }],                                     // 这一轮到期的复查；events 是约这次复查的那一轮在做的事件的 id，业务靠它对回自己给的 id
     "waiting": [{ "key", "about", "at", "events" }],                                     // 这个事项还没到期的复查，字段与 timers 相同
     "open":    [{ "card", "title", "text", "at" }],                                      // 同来源同组还没收尾的卡片
-    "decided": [{ "card", "title", "choice", "at" }]                                     // 这个事项定过的事，只对当时那件事有效；choice 已是所选那项的文字，不是下标
+    "decided": [{ "card", "title", "choice", "at" }],                                    // 这个事项定过的事，只对当时那件事有效；choice 已是所选那项的文字，不是下标
+    "memos":   [{ "run", "at", "summary", "memo" }]                                      // 这个事项前面各轮按编号留下的交接备忘，按轮次顺序保留最近 20 条
   }
 }
 ```
@@ -219,7 +220,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
 // Result
 {
   "outcome": "done" | "nothing" | "failed" | "cancelled",
-  "summary": "一句话", "error": "没跑成的原因", "limitedUntil": "2026-11-06T13:50:00+08:00", "session": "…",
+  "summary": "一句话", "error": "没跑成的原因", "limitedUntil": "2026-11-06T13:50:00+08:00", "session": "…", "memo": "留给同一事项下一轮的交接备忘（最多 4000 字）",
   "usage": { "input": 0, "output": 0, "cached": 0, "cost": 0 },
   // 下面就是回执，一个事务里一次生效
   "ask":     [{ "title", "text", "options": ["…", "…"], "recommend": 0, "about": "留给接着干的自己", "key": "这件事的固定名字" }],
@@ -322,7 +323,7 @@ POST /v1/runs/12/cancel     {}
 
 `channels` 里的 `online` 只说明通道程序还在来领卡片，不说明卡片送到了：最近一张卡片没送到时，这个通道多一项 `lastFailure`（`card`、`tries`、通道报的 `error`，`givenUp` 表示试满了一小时、已经放弃；卡片在送到前被结掉也不会再发），送到了或还没发过就没有这一项，`agent-autoloop doctor` 照它提醒。
 
-整份状态在同一个快照里读出，`seq` 是那时的日志序号：自己做看板的，先取状态，再从 `GET /v1/stream?after=<seq>` 接着读，不漏也不重。`cards`、`recentCards` 在这里多带两项：`lane` 是卡片所在的事项（写了 `parallel` 的规则是事件的对象，别的规则是空字符串），`about` 是提问时留给接着干的那一轮的说明。通道和卡片页拿不到这两项。旧客户端忽略这些字段即可。
+整份状态在同一个快照里读出，`seq` 是那时的日志序号：自己做看板的，先取状态，再从 `GET /v1/stream?after=<seq>` 接着读，不漏也不重。`cards`、`recentCards` 在这里多带两项：`lane` 是卡片所在的事项（写了 `parallel` 的规则是事件的对象，别的规则是空字符串），`about` 是提问时留给接着干的那一轮的说明。通道和卡片页拿不到这两项。`lines[]` 另外带上 `resume` 和 `parallel`，`runs[]` 另外带上 `lane`、`resume`（实际续接的旧会话编号，新会话为 `null`）和 `memo`。旧客户端忽略这些字段即可。
 
 `GET /healthz` 不带密钥，返回 `{ "ok": true, "commit": "<中台运行的版本>" }`；`doctor`、服务状态和一致性检查都用它判断中台是否在线。
 

@@ -55,7 +55,7 @@ const DEFAULTS: Partial<Record<Table, Row>> = {
   runs: {
     attempts: 0,
     ...nulls("claim", "issued", "last_issued", "last_result", "last_answer", "cancel_at", "resume", "session", "link"),
-    ...nulls("claimed_at", "seen_at", "finished_at", "summary", "error", "usage"),
+    ...nulls("claimed_at", "seen_at", "finished_at", "summary", "memo", "error", "usage"),
   },
   cards: {
     ...CARD_BASICS,
@@ -406,6 +406,7 @@ function retryLater(draft: Draft, run: Row, result: Result) {
   for (const what of ["ask", "resolve", "later", "events"] as const) {
     for (const _ of result[what] ?? []) rejected.push({ what, reason: "没跑成的一轮只能发通知" });
   }
+  if (result.memo?.trim()) rejected.push({ what: "memo", reason: "没跑成的一轮只能发通知" });
   for (const notice of result.notice ?? []) cardFromReceipt(draft, run, "notice", notice);
   const failure = { attempts, error, ...unclaimed };
   if (!ruleNamed(draft, run.rule)) {
@@ -496,8 +497,9 @@ function applyReceipt(draft: Draft, run: Row, result: Result) {
   const { id } = run;
   const rule = ruleNamed(draft, run.rule);
   const summary = result.summary ?? "";
+  const memo = result.memo?.trim() || null;
   const rejected: Rejected[] = [];
-  put(draft, "runs", id, { state: result.outcome, finished_at: draft.at, summary, error: null, cancel_at: null });
+  put(draft, "runs", id, { state: result.outcome, finished_at: draft.at, summary, memo, error: null, cancel_at: null });
   closeOpen(draft, (key) => key === `run:${id}:failing`, "后来跑成了");
   closeOpen(draft, (key) => key === `run:${id}:unknown`, "结果回来了");
   const eventIds = eventsOf(draft.view, id).map((event) => event.id);

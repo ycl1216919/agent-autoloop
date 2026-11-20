@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { dirname, join } from "node:path";
+import { setTimeout } from "node:timers/promises";
 import { parseEnv } from "node:util";
 import type { Card, ChannelContext } from "../../host/channels.ts";
 import { hubClient } from "../../protocol/client.ts";
@@ -9,6 +11,7 @@ import { connectGateway } from "./gateway.ts";
 import { handleInteraction } from "./interaction.ts";
 import { cardMessage } from "./card.ts";
 import { handleMessage } from "./message.ts";
+import { TaskThreads, seedSeenRuns, syncRunUpdates } from "./threads.ts";
 
 export default async function discord(context: ChannelContext) {
   const config = discordConfig(context.options);
@@ -66,12 +69,17 @@ export default async function discord(context: ChannelContext) {
     !/^wss:\/\/(?:[a-z0-9-]+\.)*discord\.gg\/?$/.test(endpoint.url)
   )
     throw new DiscordError(502);
+  const threadsFile =
+    config.threadsFile ??
+    (config.cardGuidanceFile ? join(dirname(config.cardGuidanceFile), "discord-threads.json") : undefined);
+  const threads = new TaskThreads(threadsFile);
   const interactionContext = {
     config,
     api,
     owner: hubClient(config.hubUrl, config.ownerKey),
     source: hubClient(config.hubUrl, config.sourceKey),
     channel: context.hub,
+    threads,
   };
   const guidance = cardGuidance(config);
   if (Object.values(guidance).some((item) => item.ref)) {
@@ -79,13 +87,31 @@ export default async function discord(context: ChannelContext) {
     const cards: Card[] = state.cards;
     for (const card of cards) {
       const ref = guidance[card.id]?.ref;
-      if (!ref || !config.channels.includes(ref.split("/")[0])) continue;
+      if (!ref) continue;
+      const targetChannel = ref.split("/")[0];
+      if (!config.channels.includes(targetChannel) && !threads.subjectOf(targetChannel)) continue;
+      threads.recordCard(card.id, ref);
       await api.request(
         "PATCH",
-        `/channels/${ref.split("/")[0]}/messages/${ref.split("/")[1]}`,
+        `/channels/${targetChannel}/messages/${ref.split("/")[1]}`,
         cardMessage({ ...card, ref }, config),
       );
     }
+  }
+  async function targetChannelFor(cardId: number): Promise<string> {
+    try {
+      const state = await interactionContext.owner.state();
+      const found = Array.isArray(state?.cards)
+        ? state.cards.find((item: unknown) => object(item) && item.id === cardId)
+        : undefined;
+      if (found && typeof found.lane === "string" && found.lane) {
+        const threadId = threads.threadOf(found.lane);
+        if (threadId) return threadId;
+      }
+    } catch {
+      // Fall back to main channel if state lookup fails.
+    }
+    return config.channelId;
   }
   async function deliver() {
     while (!signal.aborted) {
@@ -98,21 +124,23 @@ export default async function discord(context: ChannelContext) {
           if (!/^\d+\/\d+$/.test(ref)) throw new DiscordError(409);
           await api.request("PATCH", `/channels/${ref.split("/")[0]}/messages/${ref.split("/")[1]}`, body);
         } else {
+          const targetChannel = await targetChannelFor(card.id);
           const nonce = createHash("sha256").update(`${config.hubUrl}:${card.id}`).digest("hex").slice(0, 25);
-          const sent = await api.request("POST", `/channels/${config.channelId}/messages`, {
+          const sent = await api.request("POST", `/channels/${targetChannel}/messages`, {
             ...body,
             nonce,
             enforce_nonce: true,
           });
           if (!object(sent) || typeof sent.id !== "string") throw new DiscordError(502);
-          ref = `${config.channelId}/${sent.id}`;
+          ref = `${targetChannel}/${sent.id}`;
           if (card.kind === "ask" && card.state === "open")
             await api.request(
               "PATCH",
-              `/channels/${config.channelId}/messages/${sent.id}`,
+              `/channels/${targetChannel}/messages/${sent.id}`,
               cardMessage({ ...card, ref }, config),
             );
         }
+        threads.recordCard(card.id, ref);
         await context.hub.delivered(card.id, card.version, ref);
       } catch (error) {
         if (signal.aborted) return;
@@ -124,9 +152,69 @@ export default async function discord(context: ChannelContext) {
       }
     }
   }
+  async function watchRuns() {
+    const seen = new Map<number, string>();
+    let seq = 0;
+    try {
+      const initial = await interactionContext.owner.state();
+      if (typeof initial.seq === "number") seq = initial.seq;
+      seedSeenRuns(initial, seen);
+    } catch {
+      // Initial sync will retry in the loop below.
+    }
+    const base = config.hubUrl.replace(/\/$/, "");
+    while (!signal.aborted) {
+      try {
+        const response = await fetch(`${base}/v1/stream?after=${seq}`, {
+          headers: { authorization: `Bearer ${config.ownerKey}` },
+          signal,
+        });
+        if (!response.ok || !response.body) {
+          await setTimeout(3000, undefined, { signal });
+          continue;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (!signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let cut = buffer.indexOf("\n\n");
+          let changed = false;
+          while (cut !== -1) {
+            const chunk = buffer.slice(0, cut);
+            buffer = buffer.slice(cut + 2);
+            for (const line of chunk.split("\n")) {
+              if (line.startsWith("id:")) {
+                const parsed = Number(line.slice(3).trim());
+                if (Number.isSafeInteger(parsed) && parsed > seq) seq = parsed;
+              } else if (line.startsWith("data:")) {
+                if (line.includes('"table":"runs"')) changed = true;
+              }
+            }
+            cut = buffer.indexOf("\n\n");
+          }
+          if (changed) {
+            const state = await interactionContext.owner.state();
+            if (typeof state.seq === "number" && state.seq > seq) seq = state.seq;
+            await syncRunUpdates(state, seen, threads, api);
+          }
+        }
+      } catch {
+        if (signal.aborted) return;
+        try {
+          await setTimeout(3000, undefined, { signal });
+        } catch {
+          return;
+        }
+      }
+    }
+  }
   try {
     await Promise.all([
       deliver(),
+      watchRuns(),
       connectGateway({
         url: endpoint.url,
         token,

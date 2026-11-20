@@ -2,6 +2,7 @@ import type { Hub } from "../../protocol/client.ts";
 import type { Card } from "../../host/channels.ts";
 import { DiscordError, cardGuidance, holdCard, object, type DiscordConfig } from "./config.ts";
 import { cardMessage, controlId } from "./card.ts";
+import type { TaskThreads } from "./threads.ts";
 
 export type DiscordApi = { request(method: string, path: string, body?: object): Promise<unknown> };
 export type InteractionContext = {
@@ -10,6 +11,7 @@ export type InteractionContext = {
   readonly owner: Pick<Hub, "state" | "cancel" | "why" | "resolve">;
   readonly source: Pick<Hub, "event">;
   readonly channel: Pick<Hub, "answer">;
+  readonly threads?: TaskThreads;
 };
 
 const clipped = (text: string) => text.slice(0, 1900);
@@ -24,12 +26,14 @@ export async function handleInteraction(context: InteractionContext, raw: unknow
   const member = object(raw.member) && object(raw.member.user) ? raw.member.user : undefined;
   const actor = member?.id;
   const callback = `/interactions/${raw.id}/${raw.token}/callback`;
+  const allowedChannel =
+    typeof raw.channel_id === "string" &&
+    (context.config.channels.includes(raw.channel_id) || Boolean(context.threads?.subjectOf(raw.channel_id)));
   if (
     typeof actor !== "string" ||
     !context.config.users.includes(actor) ||
     raw.guild_id !== context.config.guildId ||
-    typeof raw.channel_id !== "string" ||
-    !context.config.channels.includes(raw.channel_id)
+    !allowedChannel
   ) {
     await context.api.request("POST", callback, {
       type: 4,

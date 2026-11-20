@@ -52,8 +52,33 @@ switch (mode) {
         console.log("没事可做：尚无Gemini原生完成回执。");
         break;
       }
+      const consumedFile = join(root, "consumed.json");
+      if (existsSync(consumedFile)) {
+        try {
+          const prev: unknown = JSON.parse(readFileSync(consumedFile, "utf8"));
+          if (
+            typeof prev === "object" &&
+            prev !== null &&
+            "id" in prev &&
+            "digest" in prev &&
+            prev.id === request.id &&
+            prev.digest === request.digest
+          ) {
+            console.log("没事可做：当前Gemini原生回执已处理过。");
+            break;
+          }
+        } catch {
+          // Corrupted consumed marker falls back to normal verification.
+        }
+      }
       const response = readResponse(root, request);
       writeFileSync(join(root, "creative.md"), response.markdown + "\n");
+      writeFileSync(
+        `${consumedFile}.tmp`,
+        JSON.stringify({ id: request.id, digest: request.digest, consumedAt: new Date().toISOString() }, null, 2) +
+          "\n",
+      );
+      renameSync(`${consumedFile}.tmp`, consumedFile);
       switch (request.kind) {
         case "verification":
           console.log(receipt(`Gemini原生连接验收通过：${response.model}`));

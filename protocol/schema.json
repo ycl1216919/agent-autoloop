@@ -256,6 +256,10 @@
           "type": "string",
           "maxLength": 500
         },
+        "memo": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "usage": {
           "$ref": "#/$defs/usage"
         },
@@ -552,6 +556,12 @@
               "type": "array",
               "items": {
                 "$ref": "#/$defs/context-decided"
+              }
+            },
+            "memos": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/context-memo"
               }
             }
           },
@@ -984,6 +994,26 @@
         }
       },
       "required": ["card", "title", "choice", "at"],
+      "additionalProperties": true
+    },
+    "context-memo": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "at": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        }
+      },
+      "required": ["run", "at", "summary", "memo"],
       "additionalProperties": true
     }
   }

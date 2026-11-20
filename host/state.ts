@@ -12,7 +12,7 @@ const VIEWS = {
   events: "id source key type subject summary detail link routed paused received_at",
   runs:
     "id rule agent grp lane state attempts not_before claim last_result cancel_at resume session link created_at " +
-    "claimed_at seen_at finished_at manual summary error usage",
+    "claimed_at seen_at finished_at manual memo summary error usage",
   run_events: "run_id event_id",
   cards:
     "id key kind title text options recommend about state fyi quiet choice answer by result rule lane grp source " +
@@ -128,6 +128,7 @@ function runView(run: Row, all: Reads["all"]) {
   return {
     id: run.id as number,
     rule: run.rule,
+    lane: run.lane ?? "",
     agent: run.agent,
     state: run.state,
     attempts: run.attempts,
@@ -136,8 +137,10 @@ function runView(run: Row, all: Reads["all"]) {
     finishedAt: run.finished_at,
     notBefore: run.not_before,
     summary: run.summary ?? "",
+    memo: run.memo ?? "",
     error: run.error ?? "",
     link: run.link ?? "",
+    resume: run.resume ?? null,
     session: run.session,
     usage: run.usage ? JSON.parse(run.usage) : null,
     stopping: run.cancel_at !== null,
@@ -212,8 +215,13 @@ export function stateOf(now: number, before: number | undefined, rules: Rules, {
     spending: spendingOf(all, now, rules.timezone),
     totals: { ...tally(counts), attention: openCards.length },
     // The owner's own: which matter a card is about, and what its asker left for whoever carries on. Channels don't get them.
-    cards: openCards.map((card) => ({ ...view(card), lane: card.lane, about: card.about })),
-    recentCards: recentCards.map((card) => ({ ...view(card), lane: card.lane, about: card.about })),
+    cards: openCards.map((card) => ({ ...view(card), lane: card.lane, about: card.about, run: card.run_id ?? null })),
+    recentCards: recentCards.map((card) => ({
+      ...view(card),
+      lane: card.lane,
+      about: card.about,
+      run: card.run_id ?? null,
+    })),
     timers: timers.map(({ rule, lane, key, about, at }) => ({ rule, lane, key, about, at })),
     sources: Object.entries(rules.sources).map(([id, { name }]) => {
       const events = all<Row>("SELECT COUNT(*) AS n FROM events WHERE source = ?", [id])[0].n as number;
@@ -224,6 +232,8 @@ export function stateOf(now: number, before: number | undefined, rules: Rules, {
       name: rule.name,
       group: rule.group,
       agent: rule.to,
+      resume: Boolean(rule.resume),
+      parallel: rule.parallel ?? null,
       source: eventRule(rule) ? rule.when.source : SCHEDULE,
       types: eventRule(rule) ? rule.when.types : [],
       every: eventRule(rule) ? null : describeCron(cronOf(rule)),

@@ -159,6 +159,16 @@ export function jobOf(view: View, run: Row, env: Environment): Job {
     .flatMap((state) => rows(view, "cards", { ...thread, state }, 20, true))
     .sort((a, b) => b.id - a.id)
     .slice(0, 20);
+  const memos = rows(view, "runs", { ...thread, state: ["done", "nothing"] }, 100, true)
+    .filter((past) => past.id !== run.id && typeof past.memo === "string" && past.memo.trim())
+    .slice(0, 20)
+    .reverse()
+    .map(({ id, finished_at, summary, memo }) => ({
+      run: id as number,
+      at: finished_at as string,
+      summary: (summary ?? "") as string,
+      memo: memo as string,
+    }));
   const timerView = (timer: Row) => ({
     key: timer.key,
     about: timer.about,
@@ -211,6 +221,7 @@ export function jobOf(view: View, run: Row, env: Environment): Job {
         .map(({ id, title, choice, answer, options, decided_at }) => {
           return { card: id, title, choice: choice === null ? answer : JSON.parse(options)[choice], at: decided_at };
         }),
+      memos,
     },
   };
 }

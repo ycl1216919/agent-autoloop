@@ -45,6 +45,10 @@ test("a matching native creative response produces the next SNS event and retain
       readFileSync(join(root, "creative.md"), "utf8").trim(),
       "Use the current verified battery prices and preserve the owner's manual publishing step.",
     );
+    const second = spawnSync(process.execPath, [entry, "poll", root], { encoding: "utf8" });
+    assert.equal(second.status, 0, second.stderr);
+    assert.match(second.stdout, /没事可做/);
+    assert.doesNotMatch(second.stdout, /sns\.creative\.ready/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

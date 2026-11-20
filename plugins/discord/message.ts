@@ -1,7 +1,11 @@
 import { DiscordError, object } from "./config.ts";
 import type { InteractionContext } from "./interaction.ts";
+import type { TaskThreads } from "./threads.ts";
 
-type MessageContext = Pick<InteractionContext, "config" | "source" | "channel" | "api">;
+type MessageContext = Pick<InteractionContext, "config" | "source" | "channel" | "api"> & {
+  readonly owner?: Pick<InteractionContext["owner"], "state">;
+  readonly threads?: TaskThreads;
+};
 const snowflake = (value: unknown): value is string => typeof value === "string" && /^\d+$/.test(value);
 
 export async function handleMessage(context: MessageContext, raw: unknown) {
@@ -12,7 +16,6 @@ export async function handleMessage(context: MessageContext, raw: unknown) {
     !snowflake(raw.id) ||
     raw.guild_id !== config.guildId ||
     typeof raw.channel_id !== "string" ||
-    !config.channels.includes(raw.channel_id) ||
     !object(raw.author) ||
     typeof raw.author.id !== "string" ||
     !config.users.includes(raw.author.id) ||
@@ -24,6 +27,9 @@ export async function handleMessage(context: MessageContext, raw: unknown) {
     raw.content.startsWith("/")
   )
     return;
+  const threadSubject = context.threads?.subjectOf(raw.channel_id);
+  const inMainChannel = config.channels.includes(raw.channel_id);
+  if (!inMainChannel && !threadSubject) return;
   const content = raw.content.trim();
   if ([...content].length > 4000) throw new DiscordError(400, "一条任务最多 4000 字，请拆分发送");
   const reference = raw.message_reference;
@@ -59,10 +65,45 @@ export async function handleMessage(context: MessageContext, raw: unknown) {
       return;
     }
   }
+  if (threadSubject) {
+    if (context.owner && context.threads) {
+      const state = await context.owner.state();
+      const openAsk = Array.isArray(state?.cards)
+        ? state.cards.find(
+            (card: unknown) =>
+              object(card) && card.kind === "ask" && card.state === "open" && card.lane === threadSubject,
+          )
+        : undefined;
+      if (openAsk && typeof openAsk.id === "number") {
+        const ref = context.threads.refOfCard(openAsk.id);
+        if (ref) {
+          await context.channel.answer(openAsk.id, {
+            text: content,
+            by: raw.author.id,
+            ref,
+          });
+          return;
+        }
+      }
+    }
+    await context.source.event({
+      id: `discord-message-${raw.id}`,
+      type: config.inbox.type,
+      subject: threadSubject,
+      summary: "本人在任务 Thread 补充消息",
+      detail: content,
+      link: `https://discord.com/channels/${config.guildId}/${raw.channel_id}/${raw.id}`,
+    });
+    return;
+  }
+  const subject = `discord:${raw.id}`;
+  if (context.threads) {
+    await context.threads.ensureFromMessage(context.api, raw.channel_id, raw.id, subject, content);
+  }
   await context.source.event({
     id: `discord-message-${raw.id}`,
     type: config.inbox.type,
-    subject: `discord:${raw.id}`,
+    subject,
     summary: "本人从 Discord 提交自然语言任务",
     detail: content,
     link: `https://discord.com/channels/${config.guildId}/${raw.channel_id}/${raw.id}`,

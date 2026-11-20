@@ -35,6 +35,7 @@ export default {
       // As config, because `codex exec resume` takes no -s.
       "-c",
       `sandbox_mode="${SANDBOX[turn.access]}"`,
+      ...(process.platform === "win32" && turn.access !== "full" ? ["-c", 'windows.sandbox="unelevated"'] : []),
       "-c",
       'approval_policy="never"',
       ...(turn.resume ? [turn.resume] : []),

@@ -23,10 +23,13 @@ export type DiscordConfig = {
   readonly routes: Readonly<Record<string, { readonly type: string; readonly subject: string }>>;
   readonly inbox?: { readonly type: string };
   readonly cardGuidanceFile?: string;
+  readonly threadsFile?: string;
 };
 export function discordConfig(raw: Record<string, unknown>): DiscordConfig {
   if (raw.cardGuidanceFile !== undefined && !text(raw.cardGuidanceFile))
     throw new DiscordError(400, "Discord cardGuidanceFile 需要是本机文件路径");
+  if (raw.threadsFile !== undefined && !text(raw.threadsFile))
+    throw new DiscordError(400, "Discord threadsFile 需要是本机文件路径");
   if (
     raw.inbox !== undefined &&
     (!object(raw.inbox) || typeof raw.inbox.type !== "string" || !/^[a-z][a-z0-9.-]{0,63}$/.test(raw.inbox.type))
@@ -72,6 +75,7 @@ export function discordConfig(raw: Record<string, unknown>): DiscordConfig {
     ownerKey: raw.ownerKey,
     routes,
     ...(text(raw.cardGuidanceFile) ? { cardGuidanceFile: raw.cardGuidanceFile } : {}),
+    ...(text(raw.threadsFile) ? { threadsFile: raw.threadsFile } : {}),
     ...(object(raw.inbox) && typeof raw.inbox.type === "string" ? { inbox: { type: raw.inbox.type } } : {}),
   };
 }

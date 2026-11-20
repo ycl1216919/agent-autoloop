@@ -29,6 +29,7 @@ export type Result = {
   /** A failed round's agent can't work again before this time, such as a subscription's usage limit resetting then. */
   limitedUntil?: string;
   session?: string;
+  memo?: string;
   usage?: Usage;
   ask?: Ask[];
   notice?: Notice[];
@@ -166,6 +167,7 @@ export function parseResult(input: unknown): Result {
       "error",
       "limitedUntil",
       "session",
+      "memo",
       "usage",
       "ask",
       "notice",
@@ -184,6 +186,9 @@ export function parseResult(input: unknown): Result {
   }
   if (result.limitedUntil !== undefined && (result.outcome !== "failed" || !dateTime(result.limitedUntil))) {
     throw new InputError("limitedUntil 只能跟 failed 一起交，要是带时区的 ISO 时间");
+  }
+  if (!optional(result.memo, 4000)) {
+    throw new InputError("memo 最多 4000 字");
   }
   if (!validUsage(result.usage)) throw new InputError("usage 要是对象，里面要是有限的非负数字");
   if (!listOf(result.ask, 5, validAsk)) {
