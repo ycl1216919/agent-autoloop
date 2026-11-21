@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, openSync, watch, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, watch, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { commandLine, findOnPath } from "../../../host/command.ts";
 import { NativeError, readRequest } from "./native-contract.ts";
@@ -8,7 +8,42 @@ const [directory, ...extra] = process.argv.slice(2);
 if (!directory || extra.length || !process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR)
   throw new NativeError("此入口只能由Antigravity官方原生Sidecar运行，并指定SNS资料目录");
 const root = resolve(directory);
+const runtimeFile = join(root, "runtime.json");
+
+function isCurrentOwner(): boolean {
+  if (!existsSync(runtimeFile)) return true;
+  try {
+    const data: unknown = JSON.parse(readFileSync(runtimeFile, "utf8"));
+    return typeof data === "object" && data !== null && "pid" in data && data.pid === process.pid;
+  } catch {
+    return true;
+  }
+}
+
+function stopPreviousSidecar(): void {
+  if (!existsSync(runtimeFile)) return;
+  try {
+    const data: unknown = JSON.parse(readFileSync(runtimeFile, "utf8"));
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      "pid" in data &&
+      typeof data.pid === "number" &&
+      data.pid !== process.pid
+    ) {
+      try {
+        process.kill(data.pid);
+      } catch {
+        // Previous sidecar already exited.
+      }
+    }
+  } catch {
+    // Ignore corrupted runtime.json and overwrite with current pid.
+  }
+}
+
 function scan(): void {
+  if (!isCurrentOwner()) process.exit(0);
   if (!existsSync(join(root, "request.json"))) return;
   const request = readRequest(root);
   const claimed = join(root, `dispatch-${request.id}.json`);
@@ -79,11 +114,16 @@ function scan(): void {
     );
   }
 }
+stopPreviousSidecar();
 writeFileSync(
-  join(root, "runtime.json"),
+  runtimeFile,
   JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), mechanism: "native-sidecar-agentapi" }),
 );
 scan();
-watch(root, (_event, file) => {
+const watcher = watch(root, (_event, file) => {
+  if (!isCurrentOwner()) {
+    watcher.close();
+    process.exit(0);
+  }
   if (!file || file === "request.json") scan();
 });
