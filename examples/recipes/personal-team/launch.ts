@@ -1,9 +1,28 @@
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join, isAbsolute } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { commandLine } from "../../../host/command.ts";
 import { ClientError } from "./errors.ts";
+
+/** If a versioned Codex desktop binary moved after an auto-update, pick the newest sibling codex.exe. */
+function resolveCodexProgram(configured: string): string {
+  if (existsSync(configured)) return configured;
+  const binRoot = dirname(dirname(configured));
+  const exeName = basename(configured);
+  if (!existsSync(binRoot)) return configured;
+  try {
+    const candidates = readdirSync(binRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(binRoot, entry.name, exeName))
+      .filter((candidate) => existsSync(candidate))
+      .map((candidate) => ({ candidate, mtimeMs: statSync(candidate).mtimeMs }))
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return candidates[0]?.candidate ?? configured;
+  } catch {
+    return configured;
+  }
+}
 
 type Profile = "codex" | "claude" | "gemini-personal" | "gemini-business";
 type Mode = "worker" | "client" | "login";
@@ -46,7 +65,8 @@ export async function launch(request: Launch): Promise<number> {
               `mcp_servers.autoloop.args=${JSON.stringify(server.args)}`,
             ]
           : ["-c", "mcp_servers.autoloop.enabled=false"];
-      argv = [...config.codex, ...options, ...(request.mode === "login" ? ["login"] : request.args)];
+      const codexProgram = [resolveCodexProgram(config.codex[0]), ...config.codex.slice(1)];
+      argv = [...codexProgram, ...options, ...(request.mode === "login" ? ["login"] : request.args)];
       break;
     }
     case "claude": {
